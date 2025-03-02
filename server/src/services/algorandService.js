@@ -10,9 +10,8 @@ const algodClient = new algosdk.Algodv2(ALGOD_TOKEN, ALGOD_SERVER, ALGOD_PORT);
 // Cuenta de administrador (usa un mnemónico válido)
 const ADMIN_MNEMONIC = "curve group police grunt eyebrow goose wire maid spatial garlic pair payment stereo system pull able mouse nurse rotate fiction hurry tail fork able remove";
 const adminAccount = algosdk.mnemonicToSecretKey(ADMIN_MNEMONIC);
-const SECOND_MNEMONIC = "bicycle link library direct unlock fog yard boost clock climb betray you there purpose know fluid kid crane domain future hawk organ dutch absent jaguar"
 
-const secondAccount = algosdk.mnemonicToSecretKey(SECOND_MNEMONIC);
+
 
 console.log("✅ Conectado a Algorand TestNet");
 
