@@ -3,13 +3,15 @@
 // Un formulario en CandidateRegistration.jsx para ingresar candidatos.
 // También puedes usar Algorand para registrar candidatos on-chain.
 import React, { useState } from "react";
-import { registerCandidate } from "../services/algorandService";
+import { registerCandidate, getAllTransactionNotes } from "../services/algorandService";
 
 const CandidateRegistration = () => {
     const [name, setName] = useState("");
     const [candidates, setCandidates] = useState([]);
 
     const handleAddCandidate = async () => {
+        const TransactionNotes = await getAllTransactionNotes();
+        console.log(TransactionNotes);
         if (name.trim() === "") return;
 
         const txId = await registerCandidate(name); // Guarda en Algorand

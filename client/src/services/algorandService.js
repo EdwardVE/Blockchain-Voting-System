@@ -18,12 +18,7 @@ algodClient.status().do()
 const ADMIN_MNEMONIC = "curve group police grunt eyebrow goose wire maid spatial garlic pair payment stereo system pull able mouse nurse rotate fiction hurry tail fork able remove";
 
 const adminAccount = algosdk.mnemonicToSecretKey(ADMIN_MNEMONIC);
-const addressAdminAccount = algosdk.encodeAddress(adminAccount.addr.publicKey)
-
-console.log("🔹 Dirección del administrador TODA:", adminAccount);
-console.log("🔹 Dirección del administrador:", adminAccount.addr);
-console.log("🔹 Dirección del administrador:", addressAdminAccount );
-console.log("🔹 Mnemónico del administrador:", ADMIN_MNEMONIC);
+// const addressAdminAccount = algosdk.encodeAddress(adminAccount.addr.publicKey)
 
 // Función para registrar un candidato en la blockchain
 export const registerCandidate = async (candidateName) => {
@@ -32,32 +27,59 @@ export const registerCandidate = async (candidateName) => {
         console.log("🔹 Dirección del admin (desde función):", adminAccount.addr);
 
         const params = await algodClient.getTransactionParams().do();
-        console.log("📡 Parámetros obtenidos:", params);
 
         const acctInfo = await algodClient.accountInformation(adminAccount.addr).do();
         console.log(`Account balance: ${acctInfo.amount} microAlgos`);
 
-        const note = new TextEncoder().encode(`Candidato: ${candidateName}`);
-
+        const election =  "Eleccion 1"
+        const note = new TextEncoder().encode(`${election} - Candidato: ${candidateName}`);
+        // from: "QDJH7QEBCU6QRHGJRYJPHEWU6HUMORBF32RL7GTAVDLLIZIMQ5VBHB2R7I",
+        // to: "QDJH7QEBCU6QRHGJRYJPHEWU6HUMORBF32RL7GTAVDLLIZIMQ5VBHB2R7I", 
         const txn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
-            from: "QDJH7QEBCU6QRHGJRYJPHEWU6HUMORBF32RL7GTAVDLLIZIMQ5VBHB2R7I",
-            to: "QDJH7QEBCU6QRHGJRYJPHEWU6HUMORBF32RL7GTAVDLLIZIMQ5VBHB2R7I", // Solo para registrar datos en la blockchain
-            amount: 1,  // No enviamos ALGO, solo registramos la info  // Nota opcional
-            note: note,
+            sender: adminAccount.addr,
             suggestedParams: params,
+            receiver: adminAccount.addr,
+            amount: 0,
+            note: note,
         });
 
-        const signedTxn = txn.signTxn(adminAccount.sk);
-        const { txId } = await algodClient.sendRawTransaction(signedTxn).do();
-        const result = await algosdk.waitForConfirmation(algodClient, txId, 4);
-        console.log(result);
-
-        console.log("Candidato registrado con Tx ID:", txId);
-        return txId;
+        const signedTxn =  txn.signTxn(adminAccount.sk);
+        const {txid}  = await algodClient.sendRawTransaction(signedTxn).do();
+        console.log("✅ Candidato registrado con Tx ID:", txid);
+        return txid;
     } catch (error) {
         console.log("Error al registrar candidato:", error);
         console.error("Error al registrar candidato:", error);
         return null;
+    }
+};
+
+export const getAllTransactionNotes = async () => {
+    try {
+        console.log("🔎 Obteniendo todas las transacciones de:", adminAccount.addr);
+
+        const transactions = await algodClient.accountInformation(adminAccount.addr).do();
+
+        console.log("📜 Transacciones encontradas:", transactions);
+
+
+        const notes = transactions.transactions
+            .filter(txn => txn.note) // Filtrar solo transacciones que tengan notas
+            .map(txn => {
+                const decodedNote = new TextDecoder().decode(
+                    new Uint8Array(Buffer.from(txn.note, "base64"))
+                );
+                return {
+                    txId: txn.id,
+                    note: decodedNote
+                };
+            });
+
+        console.log("📜 Notas encontradas:", notes);
+        return notes;
+    } catch (error) {
+        console.error("❌ Error al obtener las transacciones:", error);
+        return [];
     }
 };
 // Función para emitir un voto
@@ -67,18 +89,18 @@ export const voteForCandidate = async (candidateId) => {
         const note = new TextEncoder().encode(`Voto para: ${candidateId}`);
 
         const txn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
-            from: adminAccount.addr,
-            to: adminAccount.addr, // Solo registramos la info en la blockchain
-            amount: 0,
-            note,
+            sender: adminAccount.addr,
             suggestedParams: params,
+            receiver: adminAccount.addr,
+            amount: 0,
+            note: note,
         });
 
         const signedTxn = txn.signTxn(adminAccount.sk);
-        const { txId } = await algodClient.sendRawTransaction(signedTxn).do();
+        const { txid } = await algodClient.sendRawTransaction(signedTxn).do();
 
-        console.log("Voto registrado con Tx ID:", txId);
-        return txId;
+        console.log("Voto registrado con Tx ID:", txid);
+        return txid;
     } catch (error) {
         console.error("Error al votar:", error);
         return null;
@@ -122,4 +144,5 @@ export default {
     registerCandidate,
     voteForCandidate,
     getElectionResults,
+    getAllTransactionNotes
 };
