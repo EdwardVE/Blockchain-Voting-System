@@ -2,6 +2,7 @@
 
 // algorandService.js debe manejar la creación de una cuenta, enviar votos y obtener datos de la blockchain.
 import algosdk from "algosdk";
+import axios from "axios";
 
 // Configuración de Algorand TestNet
 const ALGOD_TOKEN = "";  // TestNet no necesita token
@@ -18,6 +19,7 @@ algodClient.status().do()
 const ADMIN_MNEMONIC = "curve group police grunt eyebrow goose wire maid spatial garlic pair payment stereo system pull able mouse nurse rotate fiction hurry tail fork able remove";
 
 const adminAccount = algosdk.mnemonicToSecretKey(ADMIN_MNEMONIC);
+const election =  "Eleccion 1"
 // const addressAdminAccount = algosdk.encodeAddress(adminAccount.addr.publicKey)
 
 // Función para registrar un candidato en la blockchain
@@ -31,7 +33,6 @@ export const registerCandidate = async (candidateName) => {
         const acctInfo = await algodClient.accountInformation(adminAccount.addr).do();
         console.log(`Account balance: ${acctInfo.amount} microAlgos`);
 
-        const election =  "Eleccion 1"
         const note = new TextEncoder().encode(`${election} - Candidato: ${candidateName}`);
         // from: "QDJH7QEBCU6QRHGJRYJPHEWU6HUMORBF32RL7GTAVDLLIZIMQ5VBHB2R7I",
         // to: "QDJH7QEBCU6QRHGJRYJPHEWU6HUMORBF32RL7GTAVDLLIZIMQ5VBHB2R7I", 
@@ -57,26 +58,29 @@ export const registerCandidate = async (candidateName) => {
 export const getAllTransactionNotes = async () => {
     try {
         console.log("🔎 Obteniendo todas las transacciones de:", adminAccount.addr);
-
-        const transactions = await algodClient.accountInformation(adminAccount.addr).do();
+        //! Decodificar la cuenta para buscar todas las transacciones
+        //algosdk.encodeAddress(adminAccount.addr.publicKey)
+        const { data: { transactions } } = await axios.get(`https://testnet-idx.algonode.cloud/v2/transactions?address=${adminAccount.addr}&limit=200`);
 
         console.log("📜 Transacciones encontradas:", transactions);
 
 
-        const notes = transactions.transactions
-            .filter(txn => txn.note) // Filtrar solo transacciones que tengan notas
-            .map(txn => {
-                const decodedNote = new TextDecoder().decode(
-                    new Uint8Array(Buffer.from(txn.note, "base64"))
-                );
-                return {
-                    txId: txn.id,
-                    note: decodedNote
-                };
-            });
-
-        console.log("📜 Notas encontradas:", notes);
-        return notes;
+        const filteredTransactions = transactions
+        .map(tx => ({
+            txId: tx.id,
+            name: tx.note ? new TextDecoder().decode(
+                new Uint8Array(atob(tx.note).split("").map(c => c.charCodeAt(0)))
+            ) : "" // Convertir de Uint8Array a string
+        }))
+        .filter(tx => tx.name.startsWith(election)) // Filtrar por "Eleccion 1"
+        .map(tx => ({
+            txId: tx.txId,
+            name: tx.name.split(": ")[1] // Extraer solo el nombre y apellido
+        }));
+    
+    console.log(filteredTransactions);
+    
+        return filteredTransactions;
     } catch (error) {
         console.error("❌ Error al obtener las transacciones:", error);
         return [];
@@ -110,24 +114,35 @@ export const voteForCandidate = async (candidateId) => {
 // Función para obtener los resultados de la votación desde Algorand
 export const getElectionResults = async () => {
     try {
-        const transactions = await algodClient
-            .searchForTransactions()
-            .address(adminAccount.addr)
-            .do();
+        console.log("🔎 Obteniendo todas las transacciones de:", adminAccount.addr);
+        
+        // Obtener todas las transacciones de la cuenta administradora
+        const { data: { transactions } } = await axios.get(
+            `https://testnet-idx.algonode.cloud/v2/transactions?address=${adminAccount.addr}&limit=200`
+        );
 
         const votes = {};
 
-        transactions.transactions.forEach((txn) => {
-            if (txn.note) {
-                const decodedNote = new TextDecoder().decode(
-                    new Uint8Array(Buffer.from(txn.note, "base64"))
-                );
+        const filteredTransactions = transactions
+            .map(tx => ({
+                txId: tx.id,
+                name: tx.note ? new TextDecoder().decode(
+                    new Uint8Array(atob(tx.note).split("").map(c => c.charCodeAt(0)))
+                ) : ""
+            }))
+            .filter(tx => tx.name.startsWith("Voto para: "))
+            .map(tx => ({
+                txId: tx.txId,
+                name: tx.name.replace("Voto para: ", "").trim()
+            }));
 
-                if (decodedNote.startsWith("Voto para: ")) {
-                    const candidateId = decodedNote.replace("Voto para: ", "");
-                    votes[candidateId] = (votes[candidateId] || 0) + 1;
-                }
-            }
+        filteredTransactions.forEach(({ name }) => {
+            // Normalizar el nombre (mayúscula inicial en cada palabra)
+            const candidateName = name
+                .toLowerCase()
+                .replace(/\b\w/g, (char) => char.toUpperCase());
+            
+            votes[candidateName] = (votes[candidateName] || 0) + 1;
         });
 
         return Object.keys(votes).map((candidate) => ({
@@ -135,7 +150,7 @@ export const getElectionResults = async () => {
             votes: votes[candidate],
         }));
     } catch (error) {
-        console.error("Error obteniendo resultados:", error);
+        console.error("❌ Error obteniendo resultados:", error);
         return [];
     }
 };

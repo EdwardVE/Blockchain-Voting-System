@@ -1,12 +1,5 @@
-// Ver Resultados 📊
-
-// Results.jsx debe mostrar cuántos votos ha recibido cada candidato.
-// Puedes obtener los datos de Algorand
-
-
 import React, { useEffect, useState } from "react";
-import algosdk from "algosdk";
-import algorandService from "../services/algorandService"; // Asegúrate de tener este servicio implementado
+import algorandService from "../services/algorandService";
 
 const Results = () => {
     const [results, setResults] = useState([]);
@@ -15,8 +8,20 @@ const Results = () => {
     useEffect(() => {
         const fetchResults = async () => {
             try {
-                const resultsFromAlgorand = await algorandService.getElectionResults();
-                setResults(resultsFromAlgorand);
+                const rawVotes = await algorandService.getElectionResults();
+                const voteCount = {};
+                
+                rawVotes.forEach(vote => {
+                    const formattedName = vote.name.trim().toLowerCase();
+                    voteCount[formattedName] = (voteCount[formattedName] || 0) + 1;
+                });
+                
+                const formattedResults = Object.keys(voteCount).map(name => ({
+                    name: name.replace(/\b\w/g, char => char.toUpperCase()), // Capitaliza nombres
+                    votes: voteCount[name]
+                }));
+                
+                setResults(formattedResults);
             } catch (error) {
                 console.error("Error obteniendo resultados:", error);
             } finally {
